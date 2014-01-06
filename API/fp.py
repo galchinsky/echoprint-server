@@ -15,6 +15,8 @@ import zlib, base64, re, time, random, string, math
 import pytyrant
 import datetime
 
+import StringIO
+
 now = datetime.datetime.utcnow()
 IMPORTDATE = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -161,6 +163,7 @@ def best_match_for_query(code_string, elbow=10, local=False):
 
     # Query the FP flat directly.
     response = query_fp(code_string, rows=30, local=local, get_data=True)
+    print vars(response)
     logger.debug("solr qtime is %d" % (response.header["QTime"]))
     
     if len(response.results) == 0:
@@ -258,6 +261,34 @@ def best_match_for_query(code_string, elbow=10, local=False):
         else:
             # If the actual score was not close enough, then no match.
             return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime=response.header["QTime"], tic=tic)
+
+def all_matches(code_string, local=False):
+    # DEC strings come in as unicode so we have to force them to ASCII
+    code_string = code_string.encode("utf8")
+    tic = int(time.time()*1000)
+
+    # First see if this is a compressed code
+    if re.match('[A-Za-z\/\+\_\-]', code_string) is not None:
+        code_string = decode_code_string(code_string)
+        if code_string is None:
+            return Response(Response.CANNOT_DECODE, tic=tic)
+    
+    code_len = len(code_string.split(" ")) / 2
+
+    code_string = cut_code_string_length(code_string)
+    code_len = len(code_string.split(" ")) / 2
+
+    # Query the FP flat directly.
+    response = query_fp(code_string, rows=30, local=local, get_data=True)
+    logger.debug("solr qtime is %d" % (response.header["QTime"]))
+
+    result = StringIO.StringIO()
+
+    for (i, r) in enumerate(response.results):
+        meta = metadata_for_track_id(r["track_id"], local=local)
+        print >>result, "artist: %s track_id: %s score: %s" % ( meta.get("artist", ""), r["track_id"], r["score"])
+    
+    return result.getvalue()
 
 def actual_matches(code_string_query, code_string_match, slop = 2, elbow = 10):
     code_query = code_string_query.split(" ")
