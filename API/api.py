@@ -17,8 +17,9 @@ try:
 except ImportError:
     import simplejson as json
 
-from pprint import pprint
+import pprint
 import solr
+import commands
 
 
 # Very simple web facing API for FP dist
@@ -29,6 +30,11 @@ urls = (
     '/all', 'all',
     '/all?(.*)', 'all',
     '/ingest', 'ingest',
+    '/start_session', 'start_session',
+    '/send_data?(.*)', 'send_data',
+    '/send_fingerprint', 'send_fingerprint',
+    '/check_answer', 'check_answer',
+    '/close_session', 'close_session'
 )
 
 
@@ -76,7 +82,7 @@ class query:
                            "qtime":response.qtime, \
                            "track_id":response.TRID, \
                            "total_time":response.total_time, \
-                           "artist":  response.metadata["artist"]
+                           "artist":  response.metadata.get("artist", "")
                        })
 
 class all:
@@ -88,11 +94,46 @@ class all:
         response = fp.all_matches(stuff.fp_code)
         return response
 
-#json.dumps({"ok":True, "query":stuff.fp_code, "message":response.message(), "match":response.match(), "score":response.score, \
-#                        "qtime":response.qtime, "track_id":response.TRID, "total_time":response.total_time})
 
-application = web.application(urls, globals())#.wsgifunc()
+web.config.debug = False
+app = web.application(urls, locals())
+session = web.session.Session(app, web.session.DiskStore('sessions'), initializer={'data': {}})
+
+class start_session:
+    def GET(self):
+        session.data = {}
+        return "OK"
+
+#spaghetti...
+
+import echoprint
+import array
+
+class check_answer:
+    def GET(self):
+        s = ""
+        for k, v in iter(sorted(session.data.iteritems())):
+            s = s + v
+
+        a = array.array('h')
+        a.fromstring(s)
+
+        if len(a) < 1000:
+            return "Wrong size"
+
+        b = map(lambda x : float(x)/32768.0, a)
+        
+        json_string = echoprint.codegen(b)
+
+        return json_string
+
+
+class close_session:
+    def GET(Self):
+#        session.kill()
+        return "OK"
+
         
 if __name__ == "__main__":
-    application.run()
+    app.run()
 

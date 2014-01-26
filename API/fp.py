@@ -287,6 +287,8 @@ def all_matches(code_string, local=False):
     for (i, r) in enumerate(response.results):
         meta = metadata_for_track_id(r["track_id"], local=local)
         print >>result, "artist: %s track_id: %s score: %s" % ( meta.get("artist", ""), r["track_id"], r["score"])
+        if i > 2:
+            break
     
     return result.getvalue()
 
